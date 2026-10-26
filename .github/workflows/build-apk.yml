@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  issues: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,7 +13,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-      - run: chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+      - name: Build
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+      - name: Report failure
+        if: failure()
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          { echo '```'; grep -v '^\s*at ' build.log | tail -c 50000; echo '```'; } > body.md
+          gh issue create --title "Build failed $(date -u +%FT%TZ)" --body-file body.md
       - uses: actions/upload-artifact@v4
         with: { name: MahafezCash-apk, path: app/build/outputs/apk/release/app-release.apk }
       - name: Publish as downloadable release
